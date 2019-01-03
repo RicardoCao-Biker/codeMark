@@ -6,11 +6,12 @@ const package = require('./package.json')
 const exec = require('child_process').exec
 const cache = require('apicache').middleware
 
-// version check
+// 子进程 执行shell命令 查询最新版本
 exec('npm info NeteaseCloudMusicApi version', (err, stdout, stderr) => {
-    if(!err){
+    if (!err) {
         let version = stdout.trim()
-        if(package.version < version){
+        // 对比package.json 中版本
+        if (package.version < version) {
             console.log(`最新版本: ${version}, 当前版本: ${package.version}, 请及时更新`)
         }
     }
@@ -18,12 +19,14 @@ exec('npm info NeteaseCloudMusicApi version', (err, stdout, stderr) => {
 
 const app = express()
 
-// CORS
+// 设置CORS跨域
 app.use((req, res, next) => {
-    if(req.path !== '/' && !req.path.includes('.')){
+    if (req.path !== '/' && !req.path.includes('.')) {
         res.header({
+            // 是否允许发送Cookie
             'Access-Control-Allow-Credentials': true,
-            'Access-Control-Allow-Origin': req.headers.origin || '*',
+            'Access-Control-Allow-Origin': '*',
+            // 允许拿返回头更多信息
             'Access-Control-Allow-Headers': 'X-Requested-With',
             'Access-Control-Allow-Methods': 'PUT,POST,GET,DELETE,OPTIONS',
             'Content-Type': 'application/json; charset=utf-8'
@@ -32,11 +35,12 @@ app.use((req, res, next) => {
     next()
 })
 
-// cookie parser
+// 解析cookie
 app.use((req, res, next) => {
+    // cookie使用;分号作连接
     req.cookies = {}, (req.headers.cookie || '').split(/\s*;\s*/).forEach(pair => {
         let crack = pair.indexOf('=')
-        if(crack < 1 || crack == pair.length - 1) return
+        if (crack < 1 || crack == pair.length - 1) return
         req.cookies[decodeURIComponent(pair.slice(0, crack)).trim()] = decodeURIComponent(pair.slice(crack + 1)).trim()
     })
     next()
@@ -56,24 +60,24 @@ const special = {
 }
 
 fs.readdirSync(path.join(__dirname, 'module')).reverse().forEach(file => {
-    if(!(/\.js$/i.test(file))) return
+    if (!(/\.js$/i.test(file))) return
     let route = (file in special) ? special[file] : '/' + file.replace(/\.js$/i, '').replace(/_/g, '/')
     let question = require(path.join(__dirname, 'module', file))
-    
+
     app.use(route, (req, res) => {
-        let query = {...req.query, ...req.body, cookie: req.cookies}
+        let query = { ...req.query, ...req.body, cookie: req.cookies }
         question(query, request)
-        .then(answer => {
-            console.log('[OK]', decodeURIComponent(req.originalUrl))
-            res.append('Set-Cookie', answer.cookie)
-            res.status(answer.status).send(answer.body)
-        })
-        .catch(answer => {
-            console.log('[ERR]', decodeURIComponent(req.originalUrl))
-            if(answer.body.code =='301') answer.body.msg = '需要登录'
-            res.append('Set-Cookie', answer.cookie)
-            res.status(answer.status).send(answer.body)
-        })
+            .then(answer => {
+                console.log('[OK]', decodeURIComponent(req.originalUrl))
+                res.append('Set-Cookie', answer.cookie)
+                res.status(answer.status).send(answer.body)
+            })
+            .catch(answer => {
+                console.log('[ERR]', decodeURIComponent(req.originalUrl))
+                if (answer.body.code == '301') answer.body.msg = '需要登录'
+                res.append('Set-Cookie', answer.cookie)
+                res.status(answer.status).send(answer.body)
+            })
     })
 })
 
